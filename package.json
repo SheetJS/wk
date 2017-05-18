@@ -1,0 +1,26 @@
+{
+	"name": "wk",
+	"version": "0.1.0",
+	"author": "sheetjs",
+	"description": "Spreadsheet Preview",
+	"keywords": [ "spreadsheet", "excel", "xlsx", "xls", "office", "editor", "tui" ],
+	"bin": {
+		"wk": "./view.js"
+	},
+	"main": "./wk",
+	"dependencies": {
+		"exit-on-epipe":"~1.0.0",
+		"ora":"",
+		"blessed":"",
+		"printj":"",
+		"xlsx":""
+	},
+	"devDependencies": {
+		"@types/node":""
+	},
+	"repository": { "type":"git", "url":"git://github.com/SheetJS/wk.git" },
+	"homepage": "http://sheetjs.com/opensource",
+	"bugs": { "url": "https://github.com/SheetJS/wk/issues" },
+	"license": "Apache-2.0",
+	"engines": { "node": ">=0.8" }
+}
