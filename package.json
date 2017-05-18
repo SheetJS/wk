@@ -1,6 +1,6 @@
 {
 	"name": "wk",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"author": "sheetjs",
 	"description": "Spreadsheet Preview",
 	"keywords": [ "spreadsheet", "excel", "xlsx", "xls", "office", "editor", "tui" ],

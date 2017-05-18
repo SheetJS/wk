@@ -348,7 +348,7 @@ function process_wb(wb) {
     help.hide();
     screen.render();
 }
-var n = cp.fork('./bg.js');
+var n = cp.fork(__dirname + '/bg.js');
 n.send(filename);
 n.on('message', function (wb) {
     spinner.stop();

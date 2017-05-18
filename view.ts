@@ -297,7 +297,7 @@ help.hide();
 screen.render();
 }
 
-const n = cp.fork('./bg.js');
+const n = cp.fork(__dirname + '/bg.js');
 n.send(filename);
 
 n.on('message', (wb:[XLSX.WorkBook, Error]) => {
