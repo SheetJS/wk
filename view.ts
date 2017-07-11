@@ -2,23 +2,25 @@
 /* wk.js (C) 2017-present  SheetJS -- http://sheetjs.com */
 /* vim: set ts=2 ft=javascript: */
 
-import XLSX = require('xlsx');
 import { sprintf } from 'printj';
-import blessed = require('blessed');
-import cp = require('child_process');
+import * as XLSX from 'xlsx';
+
+import * as blessed from 'blessed';
+import * as cp from 'child_process';
 import ora = require('ora');
 
-const filename:string = process.argv[2];
+const filename = process.argv[2];
 const spinner = ora('Loading ' + filename).start();
-let colwidth = 9; // TODO: This really should be an option
+let colwidth = 8;
+colwidth = 9;
 
 const FG = '#00FF00';
 const BG = 'black';
 const FS = 'blue';
 const BS = 'grey';
 
-function process_wb(wb:XLSX.WorkBook) {
-const base_cell:XLSX.CellAddress = {r:0, c:0};
+function process_wb(wb: XLSX.WorkBook): void {
+const base_cell: XLSX.CellAddress = {r:0, c:0};
 
 /* grab worksheet */
 let wsidx = 0;
@@ -26,12 +28,13 @@ let ws: XLSX.WorkSheet = wb.Sheets[wb.SheetNames[wsidx]];
 let range: XLSX.Range = XLSX.utils.decode_range(ws['!ref']);
 
 /* init screen */
-const screen:blessed.Widgets.Screen = blessed.screen({ title:"SheetJS spreadsheet viewer - " + filename });
+const screen: blessed.Widgets.Screen = blessed.screen({ title: "SheetJS spreadsheet viewer - " + filename });
 
 /* calculate number of columns required for row labels */
 let colhdr = 3;
-if(range.e.r >= 1000) colhdr = (1+Math.log(range.e.r) * Math.LOG10E)|0;
-let ncol = ((screen.cols - colhdr)/colwidth)|0, nrow = screen.rows - 4;
+if(range.e.r >= 1000) colhdr = (1 + Math.log(range.e.r) * Math.LOG10E) | 0;
+let ncol = ((screen.cols - colhdr)/colwidth)|0;
+let nrow = screen.rows - 4;
 
 
 const body = blessed.box({ height:'100%', width:'100%', bg:BG, fg:FG });
@@ -52,20 +55,33 @@ const H4l = blessed.box({ top:0, height:1, width:'50%', bg:FG, fg:BG, parent:H4 
 
 const H5 = blessed.box({ top:4, height:'100%-4', width:colhdr, bg:FG, fg:BG, parent:body });
 
-const D = [];
+const D: blessed.box[] = [];
 let DW = sprintf('100%%-%d', colhdr);
 
 
-function center_str(s:string, w:number):string {
+function center_str(s: string, w: number): string {
 	if(s.length >= w) return s.substr(0,w);
 	const pl = (w - s.length) >> 1;
 	return new Array(pl+1).join(" ") + s + new Array(w - s.length - pl + 1).join(" ");
 }
 
-function rebuild_screen() {
-	ncol = ((screen.cols - colhdr)/colwidth)|0, nrow = screen.rows - 4;
-	/* row labels */
+function right_str(s: string, w: number): string {
+	if(s.length >= w) return s.substr(0, w);
+	const l = (w - s.length);
+	return new Array(l+1).join(" ") + s;
+}
+
+function left_str(s: string, w: number): string {
+	if(s.length >= w) return s.substr(0, w);
+	const l = (w - s.length);
+	return s + new Array(l+1).join(" ");
+}
+
+function rebuild_screen(): void {
 	let O = "";
+	ncol = ((screen.cols - colhdr)/colwidth)|0, nrow = screen.rows - 4;
+
+	/* row labels */
 	for(let i = 0; i < nrow; ++i) O += sprintf("%*s\n", colhdr, XLSX.utils.encode_row(base_cell.r + i));
 	H5.setContent(O);
 
@@ -81,16 +97,25 @@ function rebuild_screen() {
 		D[i].setContent(sprintf("haha %d", i));
 	}
 
+	const fmt = "%2$ *1$.*1$s ";
 	for(let i = 0; i < nrow; ++i) {
 		O = "";
 		for(let j = 0; j < ncol; ++j) {
-			let cell:XLSX.CellObject = ws[XLSX.utils.encode_cell({r:base_cell.r+i, c:base_cell.c+j})];
+			const cell: XLSX.CellObject = ws[XLSX.utils.encode_cell({r:base_cell.r+i, c:base_cell.c+j})];
 			let o = "";
-			let fmt = "%2$ *1$.*1$s ";
 			if(cell) {
 				/* TODO: cell alignment */
-				o = cell.w ? cell.w.substr(0,colwidth-1) : String(cell.v);
-				if(cell.t == 'n') fmt = "%2$*1$" + (cell.w ? "s" : "g") + " ";
+				o = cell.w ? cell.w : String(cell.v);
+				switch(cell.t) {
+					case 'n':
+						if(!cell.w) o = sprintf("%2$*1$g", colwidth-1, cell.v);
+						/* falls through */
+					case 'd':
+						o = right_str(o, colwidth - 1); break;
+					case 's': o = left_str(o, colwidth + 1); break;
+					case 'b': case 'e': o = center_str(o, colwidth - 1); break;
+					case 'z': o = ""; break;
+				}
 			}
 			O += sprintf(fmt,colwidth-1,o);
 		}
@@ -102,12 +127,12 @@ rebuild_screen();
 screen.append(body);
 
 /* form to select worksheet */
-const form = blessed.Form({ mouse:true, keys:true, top: 'center', left: 'center', width: '50%', height: '50%', content: "" });
+const form: blessed.Form = blessed.Form({ mouse:true, keys:true, top: 'center', left: 'center', width: '50%', height: '50%', content: "" });
 form.setLabel('Select a Worksheet \n(hit backspace to cancel)');
-const radios = [];
+const radios: blessed.RadioButton[] = [];
 const radioset = blessed.RadioSet({ top:3, parent:form });
-wb.SheetNames.forEach(function(n, i) {
-	const radio = blessed.RadioButton({mouse:true, keys:true, top:i, left:0, width:'100%', height:1, content:n, parent:radioset, checked:i == wsidx});
+wb.SheetNames.forEach((n, i) => {
+	const radio: blessed.RadioButton = blessed.RadioButton({mouse:true, keys:true, top:i, left:0, width:'100%', height:1, content:n, parent:radioset, checked:i === wsidx});
 	radio.on('check', () => set_worksheet(i) );
 	radios.push(radio);
 });
@@ -125,13 +150,14 @@ const helpstr = [
 	'  Mouse scrl   Jump up/down 3 lines',
 	'  PGUP/PGDN    Jump up/down 1 page',
 	'  ',
+	'  «/»          Shrink/expand col width',
 	'  ~ (tilde)    Select Worksheet'
 ].join("\n");
 help.content = helpstr;
 screen.append(help);
 
-function set_worksheet(n:number) {
-	if(n != -1) {
+function set_worksheet(n: number): void {
+	if(n !== -1) {
 		wsidx = n;
 		ws = wb.Sheets[wb.SheetNames[wsidx]];
 		range = XLSX.utils.decode_range(ws['!ref']);
@@ -150,15 +176,15 @@ function set_worksheet(n:number) {
 /* selection */
 const sel = blessed.box({ top:0, left:0, height:1, width:colwidth, style: {bg:FS, fg:BS, transparent:true} });
 screen.append(sel);
-const selcell:XLSX.CellAddress = {r:0, c:0};
+const selcell: XLSX.CellAddress = {r:0, c:0};
 
-function show_version(arg?:Array<any>) {
+function show_version(arg?: any[]) {
 	H2l.setContent(arg && arg[0] ? arg[0] : '(C) 2017 SheetJS http://sheetjs.com  Party like it\'s 1979');
 	H3.setContent(arg && arg[1] ? arg[1] : 'Press ? for help, CTRL+C to quit');
 }
 
 /* determine whether a recentering is needed */
-function recenter_screen(cell:XLSX.CellAddress) {
+function recenter_screen(cell: XLSX.CellAddress): void {
 	let dirty = false;
 	if(cell.r < base_cell.r) { base_cell.r = cell.r; dirty = true; }
 	if(cell.c < base_cell.c) { base_cell.c = cell.c; dirty = true; }
@@ -167,16 +193,16 @@ function recenter_screen(cell:XLSX.CellAddress) {
 	if(dirty) rebuild_screen();
 }
 
-function move_sel_to_cell(cell:XLSX.CellAddress) {
+function move_sel_to_cell(cell: XLSX.CellAddress): void {
 	recenter_screen(cell);
 	selcell.c = cell.c; selcell.r = cell.r;
 	sel.top = 4 + cell.r - base_cell.r; if(sel.top < 4) sel.top = -1;
 	sel.left = colhdr + (cell.c - base_cell.c) * colwidth; if(sel.left < colhdr) sel.left = -colwidth;
-	let addr:string = XLSX.utils.encode_cell(cell);
-	let text:string = addr;
+	const addr = XLSX.utils.encode_cell(cell);
+	let text = addr;
 	if(ws[addr]) {
 		text += sprintf(" (%c) |%s|", ws[addr].t, ws[addr].w||ws[addr].v);
-		if(ws[addr].t == 'n' || ws[addr].t == 'd') text += sprintf(" raw %s", ws[addr].v);
+		if(ws[addr].t === 'n' || ws[addr].t === 'd') text += sprintf(" raw %s", ws[addr].v);
 		if(ws[addr].f) {
 			show_version([(ws[addr].F || addr) + "=" + ws[addr].f ]);
 		} else if(ws[addr].F) {
@@ -187,7 +213,7 @@ function move_sel_to_cell(cell:XLSX.CellAddress) {
 	H1l.setText(text);
 }
 
-function find_coord(r:number, c:number):XLSX.CellAddress {
+function find_coord(r: number, c: number): XLSX.CellAddress {
 	if(r < 4 || c < colhdr || c >= colhdr + ncol * colwidth) return null;
 	return {r:base_cell.r + r - 4, c:base_cell.c + ((c - colhdr) / colwidth)|0 };
 }
@@ -201,66 +227,82 @@ function init() {
 	screen.render();
 }
 
-body.on('mouse', function(mouse) {
+body.on('mouse', (mouse) => {
 	if(help.visible) {
-		if(mouse.action == 'mousemove') return;
+		if(mouse.action === 'mousemove') return;
 		help.hide(); screen.render(); return;
 	}
 	if(form.visible) return;
-	let cell:XLSX.CellAddress = {r:selcell.r, c:selcell.c};
+	const cell: XLSX.CellAddress = {r:selcell.r, c:selcell.c};
 	switch(mouse.action) {
 		case 'wheeldown':
-			cell.r += 3;
-			if(cell.r > range.e.r) cell.r = range.e.r;
-			move_sel_to_cell(cell);
+			if(mouse.ctrl) {
+				// pass
+			} else {
+				cell.r += 3;
+				if(cell.r > range.e.r) cell.r = range.e.r;
+				move_sel_to_cell(cell);
+			}
 			break;
 		case 'wheelup':
-			cell.r -= 3;
-			if(cell.r < 0) cell.r = 0;
-			move_sel_to_cell(cell);
+			if(mouse.ctrl) {
+				// pass
+			} else {
+				cell.r -= 3;
+				if(cell.r < 0) cell.r = 0;
+				move_sel_to_cell(cell);
+			}
 			break;
 		case 'mousedown':
 		case 'mouseup':
 			const cc = find_coord(mouse.y, mouse.x);
 			if(cc) move_sel_to_cell(cc);
+			break;
+		case 'mousemove': break;
+		default: throw new Error("Unsupported action: " + mouse.action);
 	}
 	screen.render();
 });
 
 
-screen.on('keypress', function(ch, key) {
+screen.on('keypress', (ch, key) => {
 	let movesel = false;
 
 	if(help.visible) { help.hide(); screen.render(); return; }
 
 	if(form.visible) {
-		if(key.name == "backspace") set_worksheet(-1);
-		else if(key.sequence && key.sequence.length == 1 && !key.ctrl && !key.meta) {
-			if(key.sequence.charCodeAt(0) == 0x1D) set_worksheet(-1);
+		if(key.name === "backspace") set_worksheet(-1);
+		else if(key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+			if(key.sequence.charCodeAt(0) === 0x1D) set_worksheet(-1);
 		}
 		screen.render(); return;
 	}
-
-	if(key.name == "pageup") {
-		if(selcell.r == 0) return;
+	if(key.name === "pageup") {
+		if(selcell.r === 0) return;
 		selcell.r -= screen.rows - 4;
 		if(selcell.r < 0) selcell.r = 0;
 		move_sel_to_cell(selcell);
 		screen.render();
-	} else if(key.name == "pagedown") {
-		if(selcell.r == range.e.r) return;
+	} else if(key.name === "pagedown") {
+		if(selcell.r === range.e.r) return;
 		selcell.r += screen.rows - 4;
 		if(selcell.r > range.e.r) selcell.r = range.e.r;
 		move_sel_to_cell(selcell);
 		screen.render();
+	} else if(ch === "»" || ch === "«") {
+		colwidth += (ch === "»") ? 1 : -1;
+		if(colwidth > 20) colwidth = 20;
+		if(colwidth < 6) colwidth = 6;
+		sel.width = colwidth;
+		move_sel_to_cell(selcell);
+		rebuild_screen(); screen.render();
 	} else if(key.sequence) {
-		if(key.sequence.length == 1 && !key.ctrl && !key.meta) {
+		if(key.sequence.length === 1 && !key.ctrl && !key.meta) {
 			switch(key.sequence.charCodeAt(0)) {
 				case 0x1D: /* escape */ screen.render(); break;
 				case 0x3F: /* ? */ help.show(); help.setFront(); screen.render(); break;
 			}
-		}
-		else if(key.sequence.length == 3 && key.sequence.substr(1,1) == "O") {
+		} else if(key.sequence.length === 3 && key.sequence.substr(1,1) === "O") {
 			switch(key.sequence.substr(2,1)) {
 				case "A": /* up arrow */
 					if(selcell.r > 0) { movesel = true; --selcell.r; } break;
@@ -300,7 +342,7 @@ screen.render();
 const n = cp.fork(__dirname + '/bg.js');
 n.send(filename);
 
-n.on('message', (wb:[XLSX.WorkBook, Error]) => {
+n.on('message', (wb: [XLSX.WorkBook, Error]) => {
 	spinner.stop();
 	if(wb[1] && wb[1].message) throw wb[1];
 	process_wb(wb[0]);

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 "use strict";
 exports.__esModule = true;
-var XLSX = require("xlsx");
 var printj_1 = require("printj");
+var XLSX = require("xlsx");
 var blessed = require("blessed");
 var cp = require("child_process");
 var ora = require("ora");
 var filename = process.argv[2];
 var spinner = ora('Loading ' + filename).start();
-var colwidth = 9; // TODO: This really should be an option
+var colwidth = 8;
+colwidth = 9;
 var FG = '#00FF00';
 var BG = 'black';
 var FS = 'blue';
@@ -25,7 +26,8 @@ function process_wb(wb) {
     var colhdr = 3;
     if (range.e.r >= 1000)
         colhdr = (1 + Math.log(range.e.r) * Math.LOG10E) | 0;
-    var ncol = ((screen.cols - colhdr) / colwidth) | 0, nrow = screen.rows - 4;
+    var ncol = ((screen.cols - colhdr) / colwidth) | 0;
+    var nrow = screen.rows - 4;
     var body = blessed.box({ height: '100%', width: '100%', bg: BG, fg: FG });
     var H1 = blessed.box({ top: 0, height: 1, width: '100%', bg: FG, fg: BG, parent: body });
     var H1r = blessed.text({ top: 0, right: 0, width: 2, bg: FG, fg: BG, parent: H1 });
@@ -46,10 +48,22 @@ function process_wb(wb) {
         var pl = (w - s.length) >> 1;
         return new Array(pl + 1).join(" ") + s + new Array(w - s.length - pl + 1).join(" ");
     }
+    function right_str(s, w) {
+        if (s.length >= w)
+            return s.substr(0, w);
+        var l = (w - s.length);
+        return new Array(l + 1).join(" ") + s;
+    }
+    function left_str(s, w) {
+        if (s.length >= w)
+            return s.substr(0, w);
+        var l = (w - s.length);
+        return s + new Array(l + 1).join(" ");
+    }
     function rebuild_screen() {
+        var O = "";
         ncol = ((screen.cols - colhdr) / colwidth) | 0, nrow = screen.rows - 4;
         /* row labels */
-        var O = "";
         for (var i = 0; i < nrow; ++i)
             O += printj_1.sprintf("%*s\n", colhdr, XLSX.utils.encode_row(base_cell.r + i));
         H5.setContent(O);
@@ -64,17 +78,34 @@ function process_wb(wb) {
             body.append(D[i]);
             D[i].setContent(printj_1.sprintf("haha %d", i));
         }
+        var fmt = "%2$ *1$.*1$s ";
         for (var i = 0; i < nrow; ++i) {
             O = "";
             for (var j = 0; j < ncol; ++j) {
                 var cell = ws[XLSX.utils.encode_cell({ r: base_cell.r + i, c: base_cell.c + j })];
                 var o = "";
-                var fmt = "%2$ *1$.*1$s ";
                 if (cell) {
                     /* TODO: cell alignment */
-                    o = cell.w ? cell.w.substr(0, colwidth - 1) : String(cell.v);
-                    if (cell.t == 'n')
-                        fmt = "%2$*1$" + (cell.w ? "s" : "g") + " ";
+                    o = cell.w ? cell.w : String(cell.v);
+                    switch (cell.t) {
+                        case 'n':
+                            if (!cell.w)
+                                o = printj_1.sprintf("%2$*1$g", colwidth - 1, cell.v);
+                        /* falls through */
+                        case 'd':
+                            o = right_str(o, colwidth - 1);
+                            break;
+                        case 's':
+                            o = left_str(o, colwidth + 1);
+                            break;
+                        case 'b':
+                        case 'e':
+                            o = center_str(o, colwidth - 1);
+                            break;
+                        case 'z':
+                            o = "";
+                            break;
+                    }
                 }
                 O += printj_1.sprintf(fmt, colwidth - 1, o);
             }
@@ -89,7 +120,7 @@ function process_wb(wb) {
     var radios = [];
     var radioset = blessed.RadioSet({ top: 3, parent: form });
     wb.SheetNames.forEach(function (n, i) {
-        var radio = blessed.RadioButton({ mouse: true, keys: true, top: i, left: 0, width: '100%', height: 1, content: n, parent: radioset, checked: i == wsidx });
+        var radio = blessed.RadioButton({ mouse: true, keys: true, top: i, left: 0, width: '100%', height: 1, content: n, parent: radioset, checked: i === wsidx });
         radio.on('check', function () { return set_worksheet(i); });
         radios.push(radio);
     });
@@ -106,12 +137,13 @@ function process_wb(wb) {
         '  Mouse scrl   Jump up/down 3 lines',
         '  PGUP/PGDN    Jump up/down 1 page',
         '  ',
+        '  «/»          Shrink/expand col width',
         '  ~ (tilde)    Select Worksheet'
     ].join("\n");
     help.content = helpstr;
     screen.append(help);
     function set_worksheet(n) {
-        if (n != -1) {
+        if (n !== -1) {
             wsidx = n;
             ws = wb.Sheets[wb.SheetNames[wsidx]];
             range = XLSX.utils.decode_range(ws['!ref']);
@@ -170,7 +202,7 @@ function process_wb(wb) {
         var text = addr;
         if (ws[addr]) {
             text += printj_1.sprintf(" (%c) |%s|", ws[addr].t, ws[addr].w || ws[addr].v);
-            if (ws[addr].t == 'n' || ws[addr].t == 'd')
+            if (ws[addr].t === 'n' || ws[addr].t === 'd')
                 text += printj_1.sprintf(" raw %s", ws[addr].v);
             if (ws[addr].f) {
                 show_version([(ws[addr].F || addr) + "=" + ws[addr].f]);
@@ -203,7 +235,7 @@ function process_wb(wb) {
     }
     body.on('mouse', function (mouse) {
         if (help.visible) {
-            if (mouse.action == 'mousemove')
+            if (mouse.action === 'mousemove')
                 return;
             help.hide();
             screen.render();
@@ -214,22 +246,35 @@ function process_wb(wb) {
         var cell = { r: selcell.r, c: selcell.c };
         switch (mouse.action) {
             case 'wheeldown':
-                cell.r += 3;
-                if (cell.r > range.e.r)
-                    cell.r = range.e.r;
-                move_sel_to_cell(cell);
+                if (mouse.ctrl) {
+                    // pass
+                }
+                else {
+                    cell.r += 3;
+                    if (cell.r > range.e.r)
+                        cell.r = range.e.r;
+                    move_sel_to_cell(cell);
+                }
                 break;
             case 'wheelup':
-                cell.r -= 3;
-                if (cell.r < 0)
-                    cell.r = 0;
-                move_sel_to_cell(cell);
+                if (mouse.ctrl) {
+                    // pass
+                }
+                else {
+                    cell.r -= 3;
+                    if (cell.r < 0)
+                        cell.r = 0;
+                    move_sel_to_cell(cell);
+                }
                 break;
             case 'mousedown':
             case 'mouseup':
                 var cc = find_coord(mouse.y, mouse.x);
                 if (cc)
                     move_sel_to_cell(cc);
+                break;
+            case 'mousemove': break;
+            default: throw new Error("Unsupported action: " + mouse.action);
         }
         screen.render();
     });
@@ -241,17 +286,17 @@ function process_wb(wb) {
             return;
         }
         if (form.visible) {
-            if (key.name == "backspace")
+            if (key.name === "backspace")
                 set_worksheet(-1);
-            else if (key.sequence && key.sequence.length == 1 && !key.ctrl && !key.meta) {
-                if (key.sequence.charCodeAt(0) == 0x1D)
+            else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+                if (key.sequence.charCodeAt(0) === 0x1D)
                     set_worksheet(-1);
             }
             screen.render();
             return;
         }
-        if (key.name == "pageup") {
-            if (selcell.r == 0)
+        if (key.name === "pageup") {
+            if (selcell.r === 0)
                 return;
             selcell.r -= screen.rows - 4;
             if (selcell.r < 0)
@@ -259,8 +304,8 @@ function process_wb(wb) {
             move_sel_to_cell(selcell);
             screen.render();
         }
-        else if (key.name == "pagedown") {
-            if (selcell.r == range.e.r)
+        else if (key.name === "pagedown") {
+            if (selcell.r === range.e.r)
                 return;
             selcell.r += screen.rows - 4;
             if (selcell.r > range.e.r)
@@ -268,50 +313,61 @@ function process_wb(wb) {
             move_sel_to_cell(selcell);
             screen.render();
         }
+        else if (ch === "»" || ch === "«") {
+            colwidth += (ch === "»") ? 1 : -1;
+            if (colwidth > 20)
+                colwidth = 20;
+            if (colwidth < 6)
+                colwidth = 6;
+            sel.width = colwidth;
+            move_sel_to_cell(selcell);
+            rebuild_screen();
+            screen.render();
+        }
         else if (key.sequence) {
-            if (key.sequence.length == 1 && !key.ctrl && !key.meta) {
+            if (key.sequence.length === 1 && !key.ctrl && !key.meta) {
                 switch (key.sequence.charCodeAt(0)) {
-                    case 0x1D:
+                    case 0x1D:/* escape */ 
                         screen.render();
                         break;
-                    case 0x3F:
+                    case 0x3F:/* ? */ 
                         help.show();
                         help.setFront();
                         screen.render();
                         break;
                 }
             }
-            else if (key.sequence.length == 3 && key.sequence.substr(1, 1) == "O") {
+            else if (key.sequence.length === 3 && key.sequence.substr(1, 1) === "O") {
                 switch (key.sequence.substr(2, 1)) {
-                    case "A":
+                    case "A":/* up arrow */ 
                         if (selcell.r > 0) {
                             movesel = true;
                             --selcell.r;
                         }
                         break;
-                    case "B":
+                    case "B":/* down arrow */ 
                         if (selcell.r < range.e.r) {
                             movesel = true;
                             ++selcell.r;
                         }
                         break;
-                    case "C":
+                    case "C":/* right arrow */ 
                         if (selcell.c < range.e.c) {
                             movesel = true;
                             ++selcell.c;
                         }
                         break;
-                    case "D":
+                    case "D":/* left arrow */ 
                         if (selcell.c > 0) {
                             movesel = true;
                             --selcell.c;
                         }
                         break;
-                    case "H":
+                    case "H":/* home */ 
                         movesel = true;
                         selcell.r = selcell.c = 0;
                         break;
-                    case "F":
+                    case "F":/* end */ 
                         movesel = true;
                         selcell.r = range.e.r;
                         selcell.c = range.e.c;
@@ -325,13 +381,13 @@ function process_wb(wb) {
         }
         else if (key.ch) {
             switch (key.ch.charCodeAt(0)) {
-                case 0x7E:
+                case 0x7E:/* ~ */ 
                     form.show();
                     form.setFront();
                     form.focus();
                     screen.render();
                     break;
-                case 0x3F:
+                case 0x3F:/* ? */ 
                     help.show();
                     help.setFront();
                     screen.render();
