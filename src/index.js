@@ -1,77 +1,66 @@
-#!/usr/bin/env node
 "use strict";
+/* wk.js (C) 2017-present  SheetJS -- http://sheetjs.com */
+/* vim: set ts=2 ft=typescript: */
 exports.__esModule = true;
+var blessed = require("blessed");
 var printj_1 = require("printj");
 var XLSX = require("xlsx");
-var blessed = require("blessed");
-var cp = require("child_process");
-var ora = require("ora");
-var filename = process.argv[2];
-var spinner = ora('Loading ' + filename).start();
-var colwidth = 8;
-colwidth = 9;
+var util_1 = require("./util");
+var help_1 = require("./help");
 var FG = '#00FF00';
 var BG = 'black';
 var FS = 'blue';
 var BS = 'grey';
-function process_wb(wb) {
-    var base_cell = { r: 0, c: 0 };
-    /* grab worksheet */
-    var wsidx = 0;
-    var ws = wb.Sheets[wb.SheetNames[wsidx]];
-    var range = XLSX.utils.decode_range(ws['!ref']);
-    /* init screen */
-    var screen = blessed.screen({ title: "SheetJS spreadsheet viewer - " + filename });
-    /* calculate number of columns required for row labels */
-    var colhdr = 3;
+var colwidth = 8;
+colwidth = 9;
+var base_cell = { r: 0, c: 0 };
+/* worksheet info */
+var wsidx = 0;
+var ws;
+var range;
+/* number of columns for row labels */
+var colhdr = 3;
+var ncol = 123;
+var nrow = 123;
+var DW = "";
+function update_wsidx(wb, screen) {
+    ws = wb.Sheets[wb.SheetNames[wsidx]];
+    range = XLSX.utils.decode_range(ws['!ref']);
+    colhdr = 3;
     if (range.e.r >= 1000)
         colhdr = (1 + Math.log(range.e.r) * Math.LOG10E) | 0;
-    var ncol = ((screen.cols - colhdr) / colwidth) | 0;
-    var nrow = screen.rows - 4;
+    ncol = ((screen.cols - colhdr) / colwidth) | 0;
+    nrow = screen.rows - 4;
+    DW = printj_1.sprintf('100%%-%d', colhdr);
+}
+function initialize(wb, filename, screen) {
+    update_wsidx(wb, screen);
     var body = blessed.box({ height: '100%', width: '100%', bg: BG, fg: FG });
     var H1 = blessed.box({ top: 0, height: 1, width: '100%', bg: FG, fg: BG, parent: body });
     var H1r = blessed.text({ top: 0, right: 0, width: 2, bg: FG, fg: BG, parent: H1 });
     var H1l = blessed.text({ top: 0, left: 0, width: '100%-2', bg: FG, fg: BG, parent: H1 });
     var H2 = blessed.box({ top: 1, height: 1, width: '100%', bg: FG, fg: BG, parent: body });
     var H2r = blessed.text({ top: 0, right: 0, width: 2, bg: BG, fg: FG, parent: H2 });
-    H2r.setContent('JS');
     var H2l = blessed.text({ top: 0, left: 0, width: '100%-2', bg: FG, fg: BG, parent: H2 });
     var H3 = blessed.box({ top: 2, height: 1, width: '100%', bg: BG, fg: FG, tags: true, parent: body });
     var H4 = blessed.box({ top: 3, height: 1, width: '100%', bg: BG, fg: FG, parent: body });
     var H4l = blessed.box({ top: 0, height: 1, width: '50%', bg: FG, fg: BG, parent: H4 });
     var H5 = blessed.box({ top: 4, height: '100%-4', width: colhdr, bg: FG, fg: BG, parent: body });
+    H2r.setContent('JS');
     var D = [];
-    var DW = printj_1.sprintf('100%%-%d', colhdr);
-    function center_str(s, w) {
-        if (s.length >= w)
-            return s.substr(0, w);
-        var pl = (w - s.length) >> 1;
-        return new Array(pl + 1).join(" ") + s + new Array(w - s.length - pl + 1).join(" ");
-    }
-    function right_str(s, w) {
-        if (s.length >= w)
-            return s.substr(0, w);
-        var l = (w - s.length);
-        return new Array(l + 1).join(" ") + s;
-    }
-    function left_str(s, w) {
-        if (s.length >= w)
-            return s.substr(0, w);
-        var l = (w - s.length);
-        return s + new Array(l + 1).join(" ");
-    }
     function rebuild_screen() {
         var O = "";
-        ncol = ((screen.cols - colhdr) / colwidth) | 0, nrow = screen.rows - 4;
+        ncol = ((screen.cols - colhdr) / colwidth) | 0;
+        nrow = screen.rows - 4;
         /* row labels */
         for (var i = 0; i < nrow; ++i)
             O += printj_1.sprintf("%*s\n", colhdr, XLSX.utils.encode_row(base_cell.r + i));
         H5.setContent(O);
         /* column labels */
         H4l.width = (ncol * colwidth + colhdr);
-        O = center_str("", colhdr);
+        O = util_1.center_str("", colhdr);
         for (var i = 0; i < ncol; ++i)
-            O += center_str(XLSX.utils.encode_col(base_cell.c + i), colwidth);
+            O += util_1.center_str(XLSX.utils.encode_col(base_cell.c + i), colwidth);
         H4l.setContent(O);
         for (var i = D.length; i < nrow; ++i) {
             D[i] = blessed.box({ top: 4 + i, left: colhdr, height: 1, width: DW, bg: BG, fg: FG });
@@ -93,14 +82,14 @@ function process_wb(wb) {
                                 o = printj_1.sprintf("%2$*1$g", colwidth - 1, cell.v);
                         /* falls through */
                         case 'd':
-                            o = right_str(o, colwidth - 1);
+                            o = util_1.right_str(o, colwidth - 1);
                             break;
                         case 's':
-                            o = left_str(o, colwidth + 1);
+                            o = util_1.left_str(o, colwidth + 1);
                             break;
                         case 'b':
                         case 'e':
-                            o = center_str(o, colwidth - 1);
+                            o = util_1.center_str(o, colwidth - 1);
                             break;
                         case 'z':
                             o = "";
@@ -115,41 +104,28 @@ function process_wb(wb) {
     rebuild_screen();
     screen.append(body);
     /* form to select worksheet */
-    var form = blessed.Form({ mouse: true, keys: true, top: 'center', left: 'center', width: '50%', height: '50%', content: "" });
-    form.setLabel('Select a Worksheet \n(hit backspace to cancel)');
-    var radios = [];
-    var radioset = blessed.RadioSet({ top: 3, parent: form });
-    wb.SheetNames.forEach(function (n, i) {
-        var radio = blessed.RadioButton({ mouse: true, keys: true, top: i, left: 0, width: '100%', height: 1, content: n, parent: radioset, checked: i === wsidx });
-        radio.on('check', function () { return set_worksheet(i); });
-        radios.push(radio);
-    });
+    var form = (function () {
+        var _form = blessed.form({ mouse: true, keys: true, top: 'center', left: 'center', width: '50%', height: '50%', content: "" });
+        _form.setLabel('Select a Worksheet \n(hit backspace to cancel)');
+        var radios = [];
+        var radioset = blessed.radioset({ top: 3, parent: _form });
+        wb.SheetNames.forEach(function (wsname, i) {
+            var radio = blessed.radiobutton({ mouse: true, keys: true, top: i, left: 0, width: '100%', height: 1, content: wsname, parent: radioset, checked: i === wsidx });
+            radio.on('check', function () { return set_worksheet(i); });
+            radios.push(radio);
+        });
+        return _form;
+    })();
     screen.append(form);
+    form.hide();
     /* help screen */
-    var help = blessed.box({ mouse: true, keys: true, top: 'center', left: 'center', width: '50%', height: '50%', content: "" });
-    var helpstr = [
-        '(press any key to close this help)',
-        '  ',
-        '  CTRL+C       Exit viewer',
-        '  ',
-        '  Click cell   Jump to selected cell',
-        '  UP/DOWN      Jump up/down 1 line',
-        '  Mouse scrl   Jump up/down 3 lines',
-        '  PGUP/PGDN    Jump up/down 1 page',
-        '  ',
-        '  «/»          Shrink/expand col width',
-        '  ~ (tilde)    Select Worksheet'
-    ].join("\n");
-    help.content = helpstr;
+    var help = help_1["default"](screen);
     screen.append(help);
-    function set_worksheet(n) {
-        if (n !== -1) {
-            wsidx = n;
-            ws = wb.Sheets[wb.SheetNames[wsidx]];
-            range = XLSX.utils.decode_range(ws['!ref']);
-            colhdr = (1 + Math.log(Math.max(999, range.e.r)) * Math.LOG10E) | 0;
-            ncol = ((screen.cols - colhdr) / colwidth) | 0;
-            DW = printj_1.sprintf('100%%-%d', colhdr);
+    help.hide();
+    function set_worksheet(_wsidx) {
+        if (_wsidx !== -1) {
+            wsidx = _wsidx;
+            update_wsidx(wb, screen);
             selcell.r = selcell.c = 0;
             move_sel_to_cell(selcell);
         }
@@ -163,7 +139,7 @@ function process_wb(wb) {
     screen.append(sel);
     var selcell = { r: 0, c: 0 };
     function show_version(arg) {
-        H2l.setContent(arg && arg[0] ? arg[0] : '(C) 2017 SheetJS http://sheetjs.com  Party like it\'s 1979');
+        H2l.setContent(arg && arg[0] ? arg[0] : '(C) SheetJS http://sheetjs.com  Party like it\'s 1979');
         H3.setContent(arg && arg[1] ? arg[1] : 'Press ? for help, CTRL+C to quit');
     }
     /* determine whether a recentering is needed */
@@ -185,11 +161,11 @@ function process_wb(wb) {
             base_cell.c = cell.c - ncol + 1;
             dirty = true;
         }
-        if (dirty)
-            rebuild_screen();
+        return dirty;
     }
     function move_sel_to_cell(cell) {
-        recenter_screen(cell);
+        if (recenter_screen(cell))
+            rebuild_screen();
         selcell.c = cell.c;
         selcell.r = cell.r;
         sel.top = 4 + cell.r - base_cell.r;
@@ -327,47 +303,48 @@ function process_wb(wb) {
         else if (key.sequence) {
             if (key.sequence.length === 1 && !key.ctrl && !key.meta) {
                 switch (key.sequence.charCodeAt(0)) {
-                    case 0x1D:/* escape */ 
+                    case 0x1D: /* escape */
                         screen.render();
                         break;
-                    case 0x3F:/* ? */ 
+                    case 0x3F: /* ? */
                         help.show();
                         help.setFront();
+                        help.focus();
                         screen.render();
                         break;
                 }
             }
             else if (key.sequence.length === 3 && key.sequence.substr(1, 1) === "O") {
                 switch (key.sequence.substr(2, 1)) {
-                    case "A":/* up arrow */ 
+                    case "A": /* up arrow */
                         if (selcell.r > 0) {
                             movesel = true;
                             --selcell.r;
                         }
                         break;
-                    case "B":/* down arrow */ 
+                    case "B": /* down arrow */
                         if (selcell.r < range.e.r) {
                             movesel = true;
                             ++selcell.r;
                         }
                         break;
-                    case "C":/* right arrow */ 
+                    case "C": /* right arrow */
                         if (selcell.c < range.e.c) {
                             movesel = true;
                             ++selcell.c;
                         }
                         break;
-                    case "D":/* left arrow */ 
+                    case "D": /* left arrow */
                         if (selcell.c > 0) {
                             movesel = true;
                             --selcell.c;
                         }
                         break;
-                    case "H":/* home */ 
+                    case "H": /* home */
                         movesel = true;
                         selcell.r = selcell.c = 0;
                         break;
-                    case "F":/* end */ 
+                    case "F": /* end */
                         movesel = true;
                         selcell.r = range.e.r;
                         selcell.c = range.e.c;
@@ -381,34 +358,26 @@ function process_wb(wb) {
         }
         else if (key.ch) {
             switch (key.ch.charCodeAt(0)) {
-                case 0x7E:/* ~ */ 
+                case 0x7E: /* ~ */
                     form.show();
                     form.setFront();
                     form.focus();
                     screen.render();
                     break;
-                case 0x3F:/* ? */ 
+                case 0x3F: /* ? */
                     help.show();
                     help.setFront();
+                    help.focus();
                     screen.render();
                     break;
             }
         }
     });
-    screen.key(['C-c'], function (ch, key) { return process.exit(0); });
+    screen.key(['C-c'], function (ch, key) { screen.destroy(); });
     process.on('SIGWINCH', function () { return rebuild_screen(); });
     init();
     show_version();
     body.focus();
-    form.hide();
-    help.hide();
     screen.render();
 }
-var n = cp.fork(__dirname + '/bg.js');
-n.send(filename);
-n.on('message', function (wb) {
-    spinner.stop();
-    if (wb[1] && wb[1].message)
-        throw wb[1];
-    process_wb(wb[0]);
-});
+exports["default"] = initialize;

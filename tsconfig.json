@@ -1,5 +1,10 @@
 {
     "compilerOptions": {
-        "moduleResolution": "node"
+        "moduleResolution": "node",
+        "noImplicitAny": true,
+        "noImplicitThis": true,
+        "strictNullChecks": false,
+        "strictFunctionTypes": true,
+        "forceConsistentCasingInFileNames": true
     }
 }

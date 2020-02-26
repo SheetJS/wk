@@ -1,13 +1,15 @@
-view.js: view.ts
+index.js: index.ts
 	tsc $<
 
 .PHONY: lint
-lint: view.ts
+lint: index.ts
 	tslint $^
 
 .PHONY: init
 init:
-	# download raw blessed type info from DT
-	@if [ ! -e blessed.d.ts ]; then curl -o blessed.d.ts https://raw.githubusercontent.com/DefinitelyTyped/DefinitelyTyped/master/types/blessed/index.d.ts; fi
-	@make view.js
+	@make index.js
 	@make lint
+
+.PHONY: clean
+clean:
+	@rm -f index.js src/*.js

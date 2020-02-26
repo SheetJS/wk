@@ -1,19 +1,20 @@
 {
-  "defaultSeverity": "error",
-  "extends": [
-    "tslint:recommended"
-  ],
-  "jsRules": {},
-  "rules": {
-    "whitespace": false,
-    "no-consecutive-blank-lines": false,
-    "trailing-comma": false,
-    "indent": false,
-    "max-line-length": false,
-    "curly": false,
-    "quotemark": false,
-    "variable-name": false,
-    "no-bitwise": false
-  },
-  "rulesDirectory": []
+	"defaultSeverity": "error",
+	"extends": [
+		"tslint:recommended"
+	],
+	"jsRules": {},
+	"rules": {
+		"whitespace": false,
+		"no-consecutive-blank-lines": false,
+		"trailing-comma": false,
+		"indent": false,
+		"max-line-length": false,
+		"curly": false,
+		"quotemark": false,
+		"variable-name": false,
+		"no-console": false,
+		"no-bitwise": false
+	},
+	"rulesDirectory": []
 }
